@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# ### Lets Create Our Own Dataset of faces
+# ###Lets Create Our Own Dataset of faces
 
-# In[1]:
+# In[ ]:
 
 
 #To generate Training Dataset
@@ -43,8 +43,13 @@ while True:
         face = cv2.resize(face_extractor(photo), (200, 200))
         face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
 
-        # Save file in specified directory with unique name
+        # Save file in specified directory with unique name (Here, I am training for 2 members)
         file_name_path = '/home/chiraggl/tlfr/faces/train/chirag/face' + str(count) + '.jpg'
+        #file_name_path = '/home/chiraggl/tlfr/faces/test/chirag/face' + str(count) + '.jpg'
+        
+        #file_name_path = '/home/chiraggl/tlfr/faces/train/ashwani/face' + str(count) + '.jpg'
+        #file_name_path = '/home/chiraggl/tlfr/faces/test/ashwani/face' + str(count) + '.jpg'
+        
         cv2.imwrite(file_name_path, face)
 
         # Put count on images and display live count
@@ -55,65 +60,7 @@ while True:
         pass
 
     if cv2.waitKey(1) == 13 or count == 100: #13 is the Enter Key
-        break
-        
-cap.release()
-cv2.destroyAllWindows()      
-print("Collecting Samples Complete")
-
-
-# In[2]:
-
-
-#To Generate Test Dataset
-
-import cv2
-
-# Initialize Webcam
-cap = cv2.VideoCapture(0)
-
-#Load Haarcascade Frontal Face Classifier
-face_classifier = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-
-#Function returns cropped face
-def face_extractor(photo):
-    gray_photo = cv2.cvtColor(photo, cv2.COLOR_BGR2GRAY)
-    faces = face_classifier.detectMultiScale(gray_photo)
-    
-    if faces is ():
-        return None
-    
-    else:
-        # Crop all faces found
-        for (x,y,w,h) in faces:
-            cropped_face = photo[y:y+h, x:x+w]
-        
-        return cropped_face
-
-
-count = 0
-
-# Collect 100 samples of your face from webcam input
-while True:
-    status,photo = cap.read()
-    
-    if face_extractor(photo) is not None:
-        count += 1
-        face = cv2.resize(face_extractor(photo), (200, 200))
-        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-
-        # Save file in specified directory with unique name
-        file_name_path = '/home/chiraggl/tlfr/faces/test/chirag/face' + str(count) + '.jpg'
-        cv2.imwrite(file_name_path, face)
-
-        # Put count on images and display live count
-        cv2.putText(face, str(count), (50, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (0,255,0), 2)
-        cv2.imshow('Face Cropper', face)
-        
-    else:
-        pass
-
-    if cv2.waitKey(1) == 13 or count == 70: #13 is the Enter Key
+    #if cv2.waitKey(1) == 13 or count == 70: #13 is the Enter Key
         break
         
 cap.release()
@@ -123,7 +70,7 @@ print("Collecting Samples Complete")
 
 # ### Load the VGG16 Model
 
-# In[3]:
+# In[ ]:
 
 
 from keras.applications import vgg16
@@ -141,7 +88,7 @@ for (i,layer) in enumerate(model.layers):
 
 # ### Freeze the Layers
 
-# In[4]:
+# In[ ]:
 
 
 # Here we freeze the layers 
@@ -156,24 +103,23 @@ for (i,layer) in enumerate(model.layers):
 
 # ### Lets create a function to add new Layers on top
 
-# In[5]:
+# In[ ]:
 
 
-def addTopModel(bottom_model, num_classes):
+def addTopModel(bottom_model, num_classes, D=256):
     #creates the top or head of the model that will be placed ontop of the bottom layers
 
     top_model = bottom_model.output
-    top_model = Flatten(name="flatten")(top_model)
-    top_model = Dense(1024,activation='relu')(top_model)
-    top_model = Dense(1024,activation='relu')(top_model)
-    top_model = Dense(512,activation='relu')(top_model)
-    top_model = Dense(num_classes,activation='softmax')(top_model)
+    top_model = Flatten(name = "flatten")(top_model)
+    top_model = Dense(D, activation = "relu")(top_model)
+    top_model = Dropout(0.3)(top_model)
+    top_model = Dense(num_classes, activation = "softmax")(top_model)
     return top_model
 
 
 # ### Adding our FC Head back onto VGG16 model
 
-# In[6]:
+# In[ ]:
 
 
 from keras.models import Sequential
@@ -183,7 +129,7 @@ from keras.layers.normalization import BatchNormalization
 from keras.models import Model
 
 # Set the number of classes
-num_classes = 1
+num_classes = 2
 
 FC_Head = addTopModel(model, num_classes)
 
@@ -194,7 +140,7 @@ print(modelnew.summary())
 
 # ### Apply Image Augmentation
 
-# In[7]:
+# In[ ]:
 
 
 from keras_preprocessing.image import ImageDataGenerator
@@ -214,25 +160,26 @@ train_datagen = ImageDataGenerator(
 validation_datagen = ImageDataGenerator(rescale=1./255)
 
 # Set the Batch Size according to your system.
-batch_size = 16
+train_batchsize = 16
+val_batchsize = 10
 
 train_generator = train_datagen.flow_from_directory(
         train_data_dir,
         target_size=(img_rows, img_cols),
-        batch_size=batch_size,
+        batch_size=train_batchsize,
         class_mode='categorical')
-
-
+ 
 validation_generator = validation_datagen.flow_from_directory(
         validation_data_dir,
         target_size=(img_rows, img_cols),
-        batch_size=batch_size,
-        class_mode='categorical')
+        batch_size=val_batchsize,
+        class_mode='categorical',
+        shuffle=False)
 
 
 # ### Training Our Model
 
-# In[11]:
+# In[ ]:
 
 
 from keras.optimizers import RMSprop
@@ -251,7 +198,7 @@ earlystop = EarlyStopping(monitor = 'val_loss',
                           verbose = 1,
                           restore_best_weights = True)
 
-# we put our call backs into a callback list
+# We put our call backs into a callback list
 callbacks = [earlystop, checkpoint]
 
 # We use a very small learning rate 
@@ -260,8 +207,8 @@ modelnew.compile(loss = 'categorical_crossentropy',
               metrics = ['accuracy'])
 
 # Enter the number of training and validation samples here
-nb_train_samples = 100
-nb_validation_samples = 70
+nb_train_samples = 200
+nb_validation_samples = 140
 
 # We only train 5 EPOCHS 
 epochs = 5
@@ -277,6 +224,31 @@ history = modelnew.fit_generator(
 modelnew.save('facedetect.h5')
 
 
+# In[ ]:
 
 
+train_generator.class_indices
+
+
+# ### Test the Model
+
+# In[ ]:
+
+
+from keras.models import load_model
+from keras.preprocessing import image
+import numpy as np
+
+m = load_model("facedetect.h5")
+
+#Path to my sample pic
+filename = '/home/chiraggl/face_test/sample' + '.jpg'
+
+cimage = image.load_img(filename, target_size=(224,224,3))
+print(cimage.show())
+
+cimage = image.img_to_array(cimage)
+cimage = np.expand_dims(cimage, axis=0)
+result = m.predict(cimage)
+print(result)
 
